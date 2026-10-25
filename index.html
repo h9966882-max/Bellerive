@@ -118,6 +118,22 @@ h2{font-size:17px;font-weight:700;margin:0 0 8px}
 .empty{padding:40px 8px}
 .empty-s{padding:14px 8px;font-size:14px;margin:0}
 
+.log-info{margin:0 4px 4px;font-size:13px;color:var(--muted);text-align:right}
+.log-month{font-size:15px;font-weight:700;margin:14px 4px 6px;color:var(--ink)}
+.pager{display:flex;justify-content:center;align-items:center;gap:6px;flex-wrap:wrap;margin:16px 0 8px}
+.pager button{min-width:42px;height:42px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-weight:700;font-size:16px}
+.pager button[aria-current="page"]{background:var(--accent);border-color:var(--accent);color:#fff}
+@media (prefers-color-scheme:dark){ .pager button[aria-current="page"]{color:#10202A} }
+.pager button:disabled{opacity:.35}
+.pager .dots{color:var(--muted);padding:0 2px}
+.tabs.small{margin-bottom:10px}
+.tabs.small button{padding:6px;font-size:15px}
+.ylist{list-style:none;padding:0;margin:0}
+.ylist button{width:100%;display:grid;grid-template-columns:48px 1fr 1fr;gap:8px;align-items:center;border:0;border-top:1px dashed var(--line);background:transparent;padding:8px 2px;text-align:right;font-size:15px}
+.ylist li:first-child button{border-top:0}
+.ylist .ym{text-align:left;font-weight:700}
+.ylist .in{color:var(--in);font-weight:700} .ylist .out{color:var(--out);font-weight:700}
+.hint{margin:8px 0 0;font-size:12px;color:var(--muted)}
 .month-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 .month-nav button{border:1px solid var(--line);background:var(--surface);width:44px;height:40px;border-radius:12px;font-size:20px}
 .mbox{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:14px;margin-bottom:12px}
@@ -368,28 +384,62 @@ function renderKid(){
     </div>
     <div class="tabs" role="tablist">
       <button role="tab" aria-selected="${tab === 'log'}" data-act="tab" data-tab="log">きろく</button>
-      <button role="tab" aria-selected="${tab === 'month'}" data-act="tab" data-tab="month">月のまとめ</button>
+      <button role="tab" aria-selected="${tab === 'month'}" data-act="tab" data-tab="month">まとめ</button>
     </div>`;
-  h += tab === 'log' ? logHtml(k) : monthHtml(k);
+  h += tab === 'log' ? logHtml(k) : summaryHtml(k);
   $app.innerHTML = h;
 }
 
+const PER_PAGE = 20;
+function txRow({ t, run }){
+  return `<li>
+    <div class="l-date">${md(t.date)}</div>
+    <div><div class="l-label">${t.icon} ${esc(t.label)}${t.qty > 1 ? ` ×${t.qty}` : ''}</div>${t.memo ? `<div class="l-memo">${esc(t.memo)}</div>` : ''}<div class="l-run">のこり ${compactCounts(run)}</div></div>
+    ${t.type === 'ex' ? `<div class="amt l-amt ex"><span class="amt-raw">${exText(t.delta)}</span></div>` : amtHtml(t.type === 'in' ? '＋' : '−', countsOf(t), 'l-amt ' + t.type)}
+    <button class="del" data-act="tx-del" data-id="${t.id}" aria-label="この記録を削除">×</button>
+  </li>`;
+}
+function pager(page, pages){
+  if (pages <= 1) return '';
+  const nums = [];
+  for (let i = 1; i <= pages; i++){
+    if (i === 1 || i === pages || Math.abs(i - page) <= 1) nums.push(i);
+    else if (nums[nums.length - 1] !== '…') nums.push('…');
+  }
+  return `<nav class="pager" aria-label="ページ">
+    <button data-act="page" data-p="${page - 1}" ${page <= 1 ? 'disabled' : ''} aria-label="前のページ">‹</button>
+    ${nums.map(n => n === '…' ? `<span class="dots">…</span>` : `<button data-act="page" data-p="${n}" ${n === page ? 'aria-current="page"' : ''}>${n}</button>`).join('')}
+    <button data-act="page" data-p="${page + 1}" ${page >= pages ? 'disabled' : ''} aria-label="次のページ">›</button>
+  </nav>`;
+}
 function logHtml(k){
   const list = S.tx.filter(t => t.kid === k.id).sort((a, b) => a.date.localeCompare(b.date) || a.at - b.at);
   if (!list.length) return `<p class="empty-s">まだ記録がありません。「もらう」「つかう」から記録できます。</p>`;
   let run = [0,0,0,0,0];
   const rows = list.map(t => { run = addVec(run, txDelta(t)); return { t, run }; }).reverse();
-  return `<ul class="log">` + rows.map(({ t, run }) => `<li>
-    <div class="l-date">${md(t.date)}</div>
-    <div><div class="l-label">${t.icon} ${esc(t.label)}${t.qty > 1 ? ` ×${t.qty}` : ''}</div>${t.memo ? `<div class="l-memo">${esc(t.memo)}</div>` : ''}<div class="l-run">のこり ${compactCounts(run)}</div></div>
-    ${t.type === 'ex' ? `<div class="amt l-amt ex"><span class="amt-raw">${exText(t.delta)}</span></div>` : amtHtml(t.type === 'in' ? '＋' : '−', countsOf(t), 'l-amt ' + t.type)}
-    <button class="del" data-act="tx-del" data-id="${t.id}" aria-label="この記録を削除">×</button>
-  </li>`).join('') + `</ul>`;
+  const pages = Math.ceil(rows.length / PER_PAGE);
+  const page = Math.min(Math.max(1, view.page || 1), pages);
+  const slice = rows.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+  // 月ごとに見出しをつける
+  const groups = [];
+  slice.forEach(r => {
+    const ym = r.t.date.slice(0, 7);
+    if (!groups.length || groups[groups.length - 1].ym !== ym) groups.push({ ym, rows:[] });
+    groups[groups.length - 1].rows.push(r);
+  });
+  const from = (page - 1) * PER_PAGE + 1, to = from + slice.length - 1;
+  return `<p class="log-info">全${rows.length}件中 ${from}〜${to}件目</p>` +
+    groups.map(g => `<h3 class="log-month">${ymLabel(g.ym)}</h3><ul class="log">${g.rows.map(txRow).join('')}</ul>`).join('') +
+    pager(page, pages);
 }
+const ymLabel = ym => `${ym.slice(0, 4)}年${+ym.slice(5, 7)}月`;
 
-function monthHtml(k){
+function summaryHtml(k){
+  const span = view.span || 'month';
   const ym = view.month || today().slice(0, 7);
-  const list = S.tx.filter(t => t.kid === k.id && t.date.startsWith(ym));
+  const yy = view.year || today().slice(0, 4);
+  const prefix = span === 'month' ? ym : yy;
+  const list = S.tx.filter(t => t.kid === k.id && t.date.startsWith(prefix));
   const group = type => {
     const m = new Map();
     list.filter(t => t.type === type).forEach(t => {
@@ -401,18 +451,33 @@ function monthHtml(k){
   const rows = g => g.length
     ? `<ul class="mlist">` + g.map(([key, v]) => `<li><span>${esc(key)}</span><span class="cnt">×${v.n}</span>${amtHtml('', sumCounts(v.list), 'm-amt')}</li>`).join('') + `</ul>`
     : `<p class="empty-s">なし</p>`;
-  const head2 = (type, label, sign) => {
-    const c = sumCounts(list.filter(t => t.type === type));
-    return `<h2><span>${label}</span>${amtHtml(sign, c, 'm-head ' + type)}</h2>`;
-  };
-  const [y, m] = ym.split('-');
-  return `<div class="month-nav">
-      <button data-act="month" data-d="-1" aria-label="前の月">‹</button>
-      <strong>${y}年${+m}月</strong>
-      <button data-act="month" data-d="1" aria-label="次の月">›</button>
+  const head2 = (type, label, sign) => `<h2><span>${label}</span>${amtHtml(sign, sumCounts(list.filter(t => t.type === type)), 'm-head ' + type)}</h2>`;
+
+  let h = `<div class="tabs small" role="tablist">
+      <button role="tab" aria-selected="${span === 'month'}" data-act="span" data-span="month">月ごと</button>
+      <button role="tab" aria-selected="${span === 'year'}" data-act="span" data-span="year">年ごと</button>
     </div>
-    <div class="mbox">${head2('in', 'もらった', '＋')}${rows(group('in'))}</div>
+    <div class="month-nav">
+      <button data-act="period" data-d="-1" aria-label="${span === 'month' ? '前の月' : '前の年'}">‹</button>
+      <strong>${span === 'month' ? ymLabel(ym) : `${yy}年`}</strong>
+      <button data-act="period" data-d="1" aria-label="${span === 'month' ? '次の月' : '次の年'}">›</button>
+    </div>`;
+
+  if (span === 'year'){
+    const months = [];
+    for (let m = 1; m <= 12; m++){
+      const key = `${yy}-${String(m).padStart(2, '0')}`;
+      const ml = list.filter(t => t.date.startsWith(key));
+      if (!ml.length) continue;
+      const tin = ml.filter(t => t.type === 'in').reduce((s, t) => s + t.amount, 0);
+      const tout = ml.filter(t => t.type === 'out').reduce((s, t) => s + t.amount, 0);
+      months.push(`<li><button data-act="open-month" data-ym="${key}"><span class="ym">${m}月</span><span class="in">＋${compact(tin)}</span><span class="out">−${compact(tout)}</span></button></li>`);
+    }
+    h += `<div class="mbox"><h2><span>月ごとの動き</span></h2>${months.length ? `<ul class="ylist">${months.join('')}</ul><p class="hint">月をタップすると、その月のまとめを開きます</p>` : '<p class="empty-s">なし</p>'}</div>`;
+  }
+  h += `<div class="mbox">${head2('in', 'もらった', '＋')}${rows(group('in'))}</div>
     <div class="mbox">${head2('out', 'つかった', '−')}${rows(group('out'))}</div>`;
+  return h;
 }
 
 function renderSettings(){
@@ -559,9 +624,19 @@ document.addEventListener('click', e => {
   switch (a){
     case 'home': go({ name:'home' }); break;
     case 'settings': go({ name:'settings' }); break;
-    case 'open-kid': go({ name:'kid', id:t.dataset.id, tab:'log' }); break;
+    case 'open-kid': go({ name:'kid', id:t.dataset.id, tab:'log', page:1 }); break;
     case 'tab': view.tab = t.dataset.tab; render(); break;
-    case 'month': view.month = shiftYM(view.month || today().slice(0, 7), +t.dataset.d); render(); break;
+    case 'span': view.span = t.dataset.span; render(); break;
+    case 'period':
+      if ((view.span || 'month') === 'month') view.month = shiftYM(view.month || today().slice(0, 7), +t.dataset.d);
+      else view.year = String(+(view.year || today().slice(0, 4)) + +t.dataset.d);
+      render(); break;
+    case 'open-month': view.span = 'month'; view.month = t.dataset.ym; render(); break;
+    case 'page': {
+      view.page = +t.dataset.p; render();
+      const tabs = document.querySelector('.tabs'); if (tabs) tabs.scrollIntoView({ block:'start' });
+      break;
+    }
     case 'close': closeSheet(); break;
 
     case 'rec': {
@@ -593,7 +668,7 @@ document.addEventListener('click', e => {
       const amount = total(sheet.counts), type = sheet.type, counts = [...sheet.counts];
       const qty = p.amount ? sheet.qty : 1;
       S.tx.push({ id:uid(), kid:view.id, date:sheet.date, type, icon:p.icon, label:p.label, qty, amount, counts, memo:sheet.memo.trim(), at:Date.now() });
-      save(); closeSheet(); render();
+      view.page = 1; save(); closeSheet(); render();
       toast(`${p.label} ${type === 'in' ? '＋' : '−'}${compactCounts(counts)} を記録しました`);
       break;
     }
@@ -612,7 +687,7 @@ document.addEventListener('click', e => {
     case 'ex-reset': sheet.delta = [0,0,0,0,0]; renderSheet(); break;
     case 'ex-save': {
       const d = [...sheet.delta];
-      S.tx.push({ id:uid(), kid:view.id, date:sheet.date, type:'ex', icon:'🔁', label:'りょうがえ', amount:0, delta:d, memo:'', at:Date.now() });
+      view.page = 1; S.tx.push({ id:uid(), kid:view.id, date:sheet.date, type:'ex', icon:'🔁', label:'りょうがえ', amount:0, delta:d, memo:'', at:Date.now() });
       save(); closeSheet(); render(); toast(`${exText(d)} を記録しました`); break;
     }
     case 'payday': openSheet({ kind:'pay', date:today() }); break;
