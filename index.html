@@ -102,7 +102,9 @@ h2{font-size:17px;font-weight:700;margin:0 0 8px}
 .tabs button[aria-selected="true"]{background:var(--surface);color:var(--ink)}
 
 .log{list-style:none;padding:0;margin:0;background:var(--surface);border:1px solid var(--line);border-radius:18px}
-.log li{display:grid;grid-template-columns:44px 1fr auto 32px;gap:8px;align-items:start;padding:12px 10px 12px 14px;border-top:1px solid var(--line)}
+.log li{border-top:1px solid var(--line)}
+.l-row{width:100%;display:grid;grid-template-columns:44px 1fr auto 14px;gap:8px;align-items:start;padding:12px 10px 12px 14px;border:0;background:transparent;text-align:left;border-radius:inherit}
+.l-row .chev{color:var(--muted);padding-top:2px}
 .log li:first-child{border-top:0}
 .l-date{font-size:13px;color:var(--muted);padding-top:2px;font-variant-numeric:tabular-nums}
 .l-label{font-weight:700}
@@ -173,7 +175,7 @@ h2{font-size:17px;font-weight:700;margin:0 0 8px}
 .qty span{font-weight:700}
 .qty button{width:44px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-size:20px;font-weight:700}
 .qty button:disabled{opacity:.35}
-.qty output{text-align:center;font-weight:900;font-size:22px}
+
 .chip{border:1.5px solid var(--line);background:transparent;border-radius:999px;padding:6px 12px;font-size:15px;display:flex;gap:6px;align-items:baseline}
 .chip small{color:var(--muted);font-size:12px}
 .chip.on{border-color:var(--accent);background:var(--accent-soft);font-weight:700}
@@ -182,7 +184,8 @@ h2{font-size:17px;font-weight:700;margin:0 0 8px}
 .st-row{display:grid;grid-template-columns:44px 44px 1fr 44px;align-items:center;gap:8px;padding:4px 0;border-left:5px solid var(--tier);padding-left:8px;margin:4px 0}
 .st-e{font-size:24px}
 .st-row button{width:44px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-size:20px;font-weight:700}
-.st-row output{text-align:center;font-weight:900;font-size:22px;font-variant-numeric:tabular-nums}
+.st-in,.qty input{width:100%;min-width:0;text-align:center;font-weight:900;font-size:22px;font-variant-numeric:tabular-nums;border:1.5px solid var(--line);border-radius:12px;background:var(--surface);padding:4px 0;-moz-appearance:textfield}
+.st-in::-webkit-inner-spin-button,.st-in::-webkit-outer-spin-button,.qty input::-webkit-inner-spin-button,.qty input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
 .st-total{text-align:right;padding:6px 2px 2px;color:var(--muted)}
 .st-total strong{color:var(--ink);font-size:18px}
 
@@ -324,7 +327,7 @@ function txDelta(t){
   return t.type === 'in' ? c : c.map(q => -q);
 }
 const addVec = (a, b) => a.map((q, i) => q + b[i]);
-const holdings = id => S.tx.filter(t => t.kid === id).reduce((acc, t) => addVec(acc, txDelta(t)), [0,0,0,0,0]);
+const holdings = (id, exclude) => S.tx.filter(t => t.kid === id && t.id !== exclude).reduce((acc, t) => addVec(acc, txDelta(t)), [0,0,0,0,0]);
 const balance = id => total(holdings(id));
 function exText(d){
   const give = d.map(q => q < 0 ? -q : 0), get = d.map(q => q > 0 ? q : 0);
@@ -392,12 +395,12 @@ function renderKid(){
 
 const PER_PAGE = 20;
 function txRow({ t, run }){
-  return `<li>
+  return `<li><button class="l-row" data-act="tx-edit" data-id="${t.id}" aria-label="${md(t.date)} ${esc(t.label)} を直す">
     <div class="l-date">${md(t.date)}</div>
     <div><div class="l-label">${t.icon} ${esc(t.label)}${t.qty > 1 ? ` ×${t.qty}` : ''}</div>${t.memo ? `<div class="l-memo">${esc(t.memo)}</div>` : ''}<div class="l-run">のこり ${compactCounts(run)}</div></div>
     ${t.type === 'ex' ? `<div class="amt l-amt ex"><span class="amt-raw">${exText(t.delta)}</span></div>` : amtHtml(t.type === 'in' ? '＋' : '−', countsOf(t), 'l-amt ' + t.type)}
-    <button class="del" data-act="tx-del" data-id="${t.id}" aria-label="この記録を削除">×</button>
-  </li>`;
+    <span class="chev" aria-hidden="true">›</span>
+  </button></li>`;
 }
 function pager(page, pages){
   if (pages <= 1) return '';
@@ -502,7 +505,7 @@ function stepper(c){
   return `<div class="stepper">` + UNITS.map((u, i) => `<div class="st-row" style="--tier:${u.c}">
       <span class="st-e">${u.e}</span>
       <button data-act="st" data-i="${i}" data-d="-1" aria-label="${u.e}を1つ減らす">−</button>
-      <output id="st-${i}">${c[i]}</output>
+      <input id="st-${i}" class="st-in" type="number" inputmode="numeric" min="0" step="1" value="${c[i]}" aria-label="${u.e}の数">
       <button data-act="st" data-i="${i}" data-d="1" aria-label="${u.e}を1つ増やす">＋</button>
     </div>`).join('') + `<div class="st-total">合計 <strong id="st-total">${compactCounts(c)}</strong></div></div>`;
 }
@@ -514,14 +517,16 @@ function sheetBody(){
     const k = kid(view.id);
     const ps = S.settings.presets[s.type];
     const selP = ps.find(p => p.id === s.presetId);
-    return head(`${k.icon} ${esc(k.name)}が${s.type === 'in' ? 'もらう' : 'つかう'}`) +
+    return head(s.editId ? `${k.icon} 記録を直す（${s.type === 'in' ? 'もらう' : 'つかう'}）` : `${k.icon} ${esc(k.name)}が${s.type === 'in' ? 'もらう' : 'つかう'}`) +
+      (s.editId && !selP ? `<p class="ex-note">いまの項目：${s.origIcon} ${esc(s.origLabel)}（変えるときは下から選んでね）</p>` : '') +
       groupPresets(ps).map(([g, items]) => `<p class="chip-group">${esc(g)}</p><div class="chips">${items.map(p => `<button class="chip${p.id === s.presetId ? ' on' : ''}" data-act="pick" data-id="${p.id}">${p.icon} ${esc(p.label)}${p.amount ? `<small>${compactCounts(pCounts(p))}</small>` : ''}</button>`).join('')}</div>`).join('') +
-      (selP && selP.amount ? `<div class="qty"><span>いくつ？</span><button data-act="qty" data-d="-1" aria-label="1つ減らす" ${s.qty <= 1 ? 'disabled' : ''}>−</button><output>${s.qty}</output><button data-act="qty" data-d="1" aria-label="1つ増やす">＋</button></div>` : '') +
+      (selP && selP.amount ? `<div class="qty"><span>いくつ？</span><button data-act="qty" data-d="-1" aria-label="1つ減らす" ${s.qty <= 1 ? 'disabled' : ''}>−</button><input id="f-qty" type="number" inputmode="numeric" min="1" step="1" value="${s.qty}" aria-label="個数"><button data-act="qty" data-d="1" aria-label="1つ増やす">＋</button></div>` : '') +
       stepper(s.counts) +
       `<label class="field"><span>メモ（なくてもOK）</span><input id="f-memo" value="${esc(s.memo)}" placeholder="${s.type === 'in' ? '例：はじめて鉄棒にチャレンジ' : '例：ピンクのシール'}"></label>
        <label class="field"><span>日付</span><input type="date" id="f-date" value="${s.date}"></label>
        <p class="warn" id="warn"></p>
-       <button class="btn ${s.type} wide" id="save" data-act="rec-save">記録する</button>`;
+       <button class="btn ${s.type} wide" id="save" data-act="rec-save">${s.editId ? '保存する' : '記録する'}</button>
+       ${s.editId ? `<div class="gap"></div><button class="btn danger wide" data-act="tx-del">この記録を削除する</button>` : ''}`;
   }
   if (s.kind === 'ex'){
     const k = kid(view.id);
@@ -534,14 +539,15 @@ function sheetBody(){
       </li>`;
     }).join('');
     const changed = s.delta.some(q => q !== 0);
-    return head(`🔁 ${esc(k.name)}のりょうがえ`) +
+    return head(s.editId ? `🔁 りょうがえを直す` : `🔁 ${esc(k.name)}のりょうがえ`) +
       `<p class="w-label">りょうがえ後のおさいふ</p>${rack(cur)}
        <p class="ex-note">${changed ? exText(s.delta) : 'ボタンを押すたびに1回ぶん両替します'}</p>
        <ul class="ex-list">${pairs}</ul>
        <div class="row"><button class="btn line" data-act="ex-all">ぜんぶ両替する</button><button class="btn line" data-act="ex-reset" ${changed ? '' : 'disabled'}>やり直す</button></div>
        <div class="gap"></div>
        <label class="field"><span>日付</span><input type="date" id="f-date" value="${s.date}"></label>
-       <button class="btn primary wide" id="save" data-act="ex-save">記録する</button>`;
+       <button class="btn primary wide" id="save" data-act="ex-save">${s.editId ? '保存する' : '記録する'}</button>
+       ${s.editId ? `<div class="gap"></div><button class="btn danger wide" data-act="tx-del">この記録を削除する</button>` : ''}`;
   }
   if (s.kind === 'pay'){
     const ym = s.date.slice(0, 7);
@@ -597,7 +603,7 @@ function validate(){
     const t = total(sheet.counts);
     if (t <= 0 || !sheet.date) ok = false;
     else if (sheet.type === 'out'){
-      const h = holdings(view.id);
+      const h = holdings(view.id, sheet.editId);
       const short = sheet.counts.map((q, i) => q > h[i] ? i : -1).filter(i => i >= 0);
       if (short.length){
         ok = false;
@@ -659,17 +665,24 @@ document.addEventListener('click', e => {
     case 'st': {
       const i = +t.dataset.i;
       sheet.counts[i] = Math.max(0, sheet.counts[i] + +t.dataset.d);
-      document.getElementById('st-' + i).textContent = sheet.counts[i];
+      document.getElementById('st-' + i).value = sheet.counts[i];
       document.getElementById('st-total').textContent = compactCounts(sheet.counts);
       validate(); break;
     }
     case 'rec-save': {
-      const p = S.settings.presets[sheet.type].find(x => x.id === sheet.presetId) || { icon:sheet.type === 'in' ? '🎁' : '🛍️', label:'そのほか' };
+      const sel = S.settings.presets[sheet.type].find(x => x.id === sheet.presetId);
+      const p = sel || (sheet.editId ? { icon:sheet.origIcon, label:sheet.origLabel } : { icon:sheet.type === 'in' ? '🎁' : '🛍️', label:'そのほか' });
       const amount = total(sheet.counts), type = sheet.type, counts = [...sheet.counts];
-      const qty = p.amount ? sheet.qty : 1;
-      S.tx.push({ id:uid(), kid:view.id, date:sheet.date, type, icon:p.icon, label:p.label, qty, amount, counts, memo:sheet.memo.trim(), at:Date.now() });
-      view.page = 1; save(); closeSheet(); render();
-      toast(`${p.label} ${type === 'in' ? '＋' : '−'}${compactCounts(counts)} を記録しました`);
+      const qty = sel && sel.amount ? sheet.qty : 1;
+      const data = { kid:view.id, date:sheet.date, type, presetId:sel ? sel.id : null, icon:p.icon, label:p.label, qty, amount, counts, memo:sheet.memo.trim() };
+      if (sheet.editId){
+        Object.assign(S.tx.find(x => x.id === sheet.editId), data);
+        save(); closeSheet(); render(); toast('記録を直しました');
+      } else {
+        S.tx.push({ id:uid(), ...data, at:Date.now() });
+        view.page = 1; save(); closeSheet(); render();
+        toast(`${p.label} ${type === 'in' ? '＋' : '−'}${compactCounts(counts)} を記録しました`);
+      }
       break;
     }
 
@@ -687,6 +700,10 @@ document.addEventListener('click', e => {
     case 'ex-reset': sheet.delta = [0,0,0,0,0]; renderSheet(); break;
     case 'ex-save': {
       const d = [...sheet.delta];
+      if (sheet.editId){
+        Object.assign(S.tx.find(x => x.id === sheet.editId), { date:sheet.date, delta:d });
+        save(); closeSheet(); render(); toast('記録を直しました'); break;
+      }
       view.page = 1; S.tx.push({ id:uid(), kid:view.id, date:sheet.date, type:'ex', icon:'🔁', label:'りょうがえ', amount:0, delta:d, memo:'', at:Date.now() });
       save(); closeSheet(); render(); toast(`${exText(d)} を記録しました`); break;
     }
@@ -722,10 +739,22 @@ document.addEventListener('click', e => {
       save(); closeSheet(); go({ name:'home' }); toast('削除しました'); break;
     }
 
+    case 'tx-edit': {
+      const x = S.tx.find(y => String(y.id) === t.dataset.id); if (!x) break;
+      if (x.type === 'ex'){
+        openSheet({ kind:'ex', editId:x.id, base:holdings(view.id, x.id), delta:[...x.delta], date:x.date });
+        break;
+      }
+      const ps = S.settings.presets[x.type];
+      const p = ps.find(q => q.id === x.presetId) || (x.payday ? null : ps.find(q => q.label === x.label && q.icon === x.icon));
+      openSheet({ kind:'rec', editId:x.id, type:x.type, presetId:p ? p.id : null, qty:x.qty || 1, counts:[...countsOf(x)],
+        memo:x.memo || '', date:x.date, origLabel:x.label, origIcon:x.icon });
+      break;
+    }
     case 'tx-del': {
-      const x = S.tx.find(y => y.id === t.dataset.id);
+      const x = S.tx.find(y => y.id === sheet.editId);
       if (!confirm(`${md(x.date)}「${x.label}」${x.type === 'ex' ? exText(x.delta) : (x.type === 'in' ? '＋' : '−') + compactCounts(countsOf(x))} を削除しますか？`)) break;
-      S.tx = S.tx.filter(y => y.id !== x.id); save(); render(); toast('記録を削除しました'); break;
+      S.tx = S.tx.filter(y => y.id !== x.id); save(); closeSheet(); render(); toast('記録を削除しました'); break;
     }
 
     case 'preset-new': openSheet({ kind:'preset', type:t.dataset.type, id:null, label:'', icon:t.dataset.type === 'in' ? '🌱' : '🛒', group:'', counts:[0,0,0,0,0] }); break;
@@ -771,9 +800,30 @@ document.addEventListener('input', e => {
   if (id === 'f-label') sheet.label = v;
   if (id === 'f-icon') sheet.icon = v;
   if (id === 'f-group') sheet.group = v;
+  if (/^st-[0-4]$/.test(id)){
+    const n = parseInt(v, 10);
+    sheet.counts[+id.slice(3)] = Number.isFinite(n) && n > 0 ? n : 0;
+    const tt = document.getElementById('st-total'); if (tt) tt.textContent = compactCounts(sheet.counts);
+  }
+  if (id === 'f-qty'){
+    const n = parseInt(v, 10);
+    if (Number.isFinite(n) && n >= 1){
+      const p = S.settings.presets[sheet.type].find(x => x.id === sheet.presetId);
+      sheet.qty = n;
+      sheet.counts = pCounts(p).map(q => q * n);
+      sheet.counts.forEach((q, i) => { const el = document.getElementById('st-' + i); if (el) el.value = q; });
+      document.getElementById('st-total').textContent = compactCounts(sheet.counts);
+    }
+  }
   validate();
 });
 
+document.addEventListener('focusin', e => { if (e.target.matches && e.target.matches('input[type="number"]')) e.target.select(); });
+document.addEventListener('focusout', e => {
+  if (!sheet || !e.target.id) return;
+  if (/^st-[0-4]$/.test(e.target.id)) e.target.value = sheet.counts[+e.target.id.slice(3)];
+  if (e.target.id === 'f-qty') e.target.value = sheet.qty;
+});
 document.addEventListener('change', e => {
   if (e.target.id !== 'import') return;
   const file = e.target.files[0]; if (!file) return;
