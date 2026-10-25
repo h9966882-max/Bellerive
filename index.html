@@ -150,7 +150,14 @@ h2{font-size:17px;font-weight:700;margin:0 0 8px}
 @media (prefers-reduced-motion:reduce){.panel{animation:none}}
 .p-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
 .p-head h2{margin:0;font-size:19px}
-.chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.chip-group{margin:4px 2px 6px;font-size:13px;font-weight:700;color:var(--muted)}
+.plist + .chip-group{margin-top:12px}
+.qty{display:grid;grid-template-columns:1fr 44px 56px 44px;align-items:center;gap:8px;margin:4px 0 10px;padding:8px 12px;border:1.5px solid var(--accent);border-radius:14px}
+.qty span{font-weight:700}
+.qty button{width:44px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-size:20px;font-weight:700}
+.qty button:disabled{opacity:.35}
+.qty output{text-align:center;font-weight:900;font-size:22px}
 .chip{border:1.5px solid var(--line);background:transparent;border-radius:999px;padding:6px 12px;font-size:15px;display:flex;gap:6px;align-items:baseline}
 .chip small{color:var(--muted);font-size:12px}
 .chip.on{border-color:var(--accent);background:var(--accent-soft);font-weight:700}
@@ -218,10 +225,45 @@ function road(b){
 /* ===== データ ===== */
 const KEY = 'okozukai-chou-v1';
 const KID_ICONS = ['🐥','🐅','🦬','🤖','🎩','🧶'];
+/* 文房具屋さんのおねだん表 */
+const SHOP_RAW = [
+  ['s-paper-white', '📄', '白い大きな画用紙（1枚）',     [0,0,0,0,5], '画用紙'],
+  ['s-paper-color', '🎨', '色つき大きな画用紙（1枚）',   [0,0,0,1,2], '画用紙'],
+  ['s-paper-b5',    '🟩', 'B5色画用紙（1枚）',           [0,0,0,0,3], '画用紙'],
+  ['s-paper-card',  '🟦', 'ハガキサイズ色画用紙（1枚）', [0,0,0,0,1], '画用紙'],
+  ['s-paper-thick', '📦', '厚紙 白／茶（1枚）',          [0,0,0,0,2], '画用紙'],
+  ['s-ori-1',       '🔶', 'ふつうの折り紙（1枚）',       [0,0,0,0,1], '折り紙'],
+  ['s-ori-3',       '🔷', '折り紙まとめ買い（3枚）',     [0,0,0,0,2], '折り紙'],
+  ['s-ori-kira',    '✨', 'キラキラ折り紙（1枚）',       [0,0,0,0,3], '折り紙'],
+  ['s-seal-3',      '💗', 'シール（3枚）',               [0,0,0,0,1], 'シール'],
+  ['s-seal-5',      '💖', 'シールまとめ買い（5枚）',     [0,0,0,0,2], 'シール'],
+  ['s-tape-10',     '🎀', 'マステ（10cm）',              [0,0,0,0,1], 'マステ'],
+  ['s-tape-30',     '🌸', 'マステ 同じ柄（30cm）',       [0,0,0,0,2], 'マステ'],
+  ['s-tape-3x10',   '🌈', 'マステ 違う柄（3柄×10cm）',   [0,0,0,0,2], 'マステ'],
+];
+const SHOP = SHOP_RAW.map(([id, icon, label, counts, group]) => ({ id, icon, label, counts, amount:total(counts), group }));
+const pCounts = p => Array.isArray(p.counts) ? [...p.counts] : split(p.amount);
+function groupPresets(list){
+  const m = new Map();
+  list.forEach(p => { const g = p.group || 'そのほか'; if (!m.has(g)) m.set(g, []); m.get(g).push(p); });
+  const arr = [...m.entries()];
+  return arr.filter(([g]) => g !== 'そのほか').concat(arr.filter(([g]) => g === 'そのほか'));
+}
+function migrate(s){
+  if (!s.settings.shopV2){
+    const old = ['p-seal','p-tape','p-paper'];
+    const rest = s.settings.presets.out.filter(p => !old.includes(p.id));
+    rest.forEach(p => { if (['p-snack','p-juice','p-event'].includes(p.id) && !p.group) p.group = 'おやつ・イベント'; });
+    s.settings.presets.out = [...SHOP.map(x => ({ ...x, counts:[...x.counts] })), ...rest];
+    s.settings.shopV2 = true;
+  }
+  return s;
+}
 function defaults(){
   return {
     kids: [], tx: [],
     settings: {
+      shopV2: true,
       payday: 500, // 4🦬8🐅20🐥
       payCounts: [0,0,4,8,20],
       presets: {
@@ -233,13 +275,11 @@ function defaults(){
           { id:'p-in-other',  icon:'🎁', label:'そのほか',       amount:0 },
         ],
         out: [
-          { id:'p-seal',      icon:'✨', label:'シール',           amount:1 },
-          { id:'p-tape',      icon:'🎀', label:'マスキングテープ', amount:2 },
-          { id:'p-paper',     icon:'📄', label:'画用紙',           amount:1 },
-          { id:'p-snack',     icon:'🍪', label:'おやつおかわり',   amount:30 },
-          { id:'p-juice',     icon:'🧃', label:'ジュースおかわり', amount:30 },
-          { id:'p-event',     icon:'🎪', label:'イベント参加',     amount:10000 },
-          { id:'p-out-other', icon:'🛍️', label:'お買い物',         amount:0 },
+          ...SHOP.map(x => ({ ...x, counts:[...x.counts] })),
+          { id:'p-snack',     icon:'🍪', label:'おやつおかわり',   amount:30,    group:'おやつ・イベント' },
+          { id:'p-juice',     icon:'🧃', label:'ジュースおかわり', amount:30,    group:'おやつ・イベント' },
+          { id:'p-event',     icon:'🎪', label:'イベント参加',     amount:10000, group:'おやつ・イベント' },
+          { id:'p-out-other', icon:'🛍️', label:'そのほか',         amount:0 },
         ],
       },
     },
@@ -253,7 +293,8 @@ function save(){
   try { localStorage.setItem(KEY, JSON.stringify(S)); }
   catch(e) { toast('保存できませんでした。ブラウザの設定を確認してください'); }
 }
-let S = load();
+let S = migrate(load());
+save();
 
 /* ===== ユーティリティ ===== */
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -340,7 +381,7 @@ function logHtml(k){
   const rows = list.map(t => { run = addVec(run, txDelta(t)); return { t, run }; }).reverse();
   return `<ul class="log">` + rows.map(({ t, run }) => `<li>
     <div class="l-date">${md(t.date)}</div>
-    <div><div class="l-label">${t.icon} ${esc(t.label)}</div>${t.memo ? `<div class="l-memo">${esc(t.memo)}</div>` : ''}<div class="l-run">のこり ${compactCounts(run)}</div></div>
+    <div><div class="l-label">${t.icon} ${esc(t.label)}${t.qty > 1 ? ` ×${t.qty}` : ''}</div>${t.memo ? `<div class="l-memo">${esc(t.memo)}</div>` : ''}<div class="l-run">のこり ${compactCounts(run)}</div></div>
     ${t.type === 'ex' ? `<div class="amt l-amt ex"><span class="amt-raw">${exText(t.delta)}</span></div>` : amtHtml(t.type === 'in' ? '＋' : '−', countsOf(t), 'l-amt ' + t.type)}
     <button class="del" data-act="tx-del" data-id="${t.id}" aria-label="この記録を削除">×</button>
   </li>`).join('') + `</ul>`;
@@ -353,12 +394,12 @@ function monthHtml(k){
     const m = new Map();
     list.filter(t => t.type === type).forEach(t => {
       const key = `${t.icon} ${t.label}`;
-      const g = m.get(key) || { n:0, sum:0, list:[] }; g.n++; g.sum += t.amount; g.list.push(t); m.set(key, g);
+      const g = m.get(key) || { n:0, sum:0, list:[] }; g.n += (t.qty || 1); g.sum += t.amount; g.list.push(t); m.set(key, g);
     });
     return [...m.entries()].sort((a, b) => b[1].sum - a[1].sum);
   };
   const rows = g => g.length
-    ? `<ul class="mlist">` + g.map(([key, v]) => `<li><span>${esc(key)}</span><span class="cnt">${v.n}回</span>${amtHtml('', sumCounts(v.list), 'm-amt')}</li>`).join('') + `</ul>`
+    ? `<ul class="mlist">` + g.map(([key, v]) => `<li><span>${esc(key)}</span><span class="cnt">×${v.n}</span>${amtHtml('', sumCounts(v.list), 'm-amt')}</li>`).join('') + `</ul>`
     : `<p class="empty-s">なし</p>`;
   const head2 = (type, label, sign) => {
     const c = sumCounts(list.filter(t => t.type === type));
@@ -375,9 +416,9 @@ function monthHtml(k){
 }
 
 function renderSettings(){
-  const plist = type => `<ul class="plist">` + S.settings.presets[type].map(p =>
-    `<li><button data-act="preset-edit" data-type="${type}" data-id="${p.id}"><span>${p.icon} ${esc(p.label)}</span><small>${p.amount ? compact(p.amount) : 'その都度'}</small></button></li>`
-  ).join('') + `</ul><button class="btn ghost wide" data-act="preset-new" data-type="${type}">＋ 項目を追加する</button>`;
+  const plist = type => groupPresets(S.settings.presets[type]).map(([g, items]) => `<p class="chip-group">${esc(g)}</p><ul class="plist">` + items.map(p =>
+    `<li><button data-act="preset-edit" data-type="${type}" data-id="${p.id}"><span>${p.icon} ${esc(p.label)}</span><small>${p.amount ? compactCounts(pCounts(p)) : 'その都度'}</small></button></li>`
+  ).join('') + `</ul>`).join('') + `<button class="btn ghost wide" data-act="preset-new" data-type="${type}">＋ 項目を追加する</button>`;
   $app.innerHTML = `<div class="head"><button class="back" data-act="home">‹ 一覧</button><h1>設定</h1><span style="width:44px"></span></div>
     <section class="set"><h2>お給料日の支給額</h2><p>いまは1人あたり ${compactCounts(S.settings.payCounts)}（🐥換算で${S.settings.payday}）</p>
       <button class="btn line wide" data-act="pay-edit">支給額を変える</button></section>
@@ -407,8 +448,10 @@ function sheetBody(){
   if (s.kind === 'rec'){
     const k = kid(view.id);
     const ps = S.settings.presets[s.type];
+    const selP = ps.find(p => p.id === s.presetId);
     return head(`${k.icon} ${esc(k.name)}が${s.type === 'in' ? 'もらう' : 'つかう'}`) +
-      `<div class="chips">${ps.map(p => `<button class="chip${p.id === s.presetId ? ' on' : ''}" data-act="pick" data-id="${p.id}">${p.icon} ${esc(p.label)}${p.amount ? `<small>${compact(p.amount)}</small>` : ''}</button>`).join('')}</div>` +
+      groupPresets(ps).map(([g, items]) => `<p class="chip-group">${esc(g)}</p><div class="chips">${items.map(p => `<button class="chip${p.id === s.presetId ? ' on' : ''}" data-act="pick" data-id="${p.id}">${p.icon} ${esc(p.label)}${p.amount ? `<small>${compactCounts(pCounts(p))}</small>` : ''}</button>`).join('')}</div>`).join('') +
+      (selP && selP.amount ? `<div class="qty"><span>いくつ？</span><button data-act="qty" data-d="-1" aria-label="1つ減らす" ${s.qty <= 1 ? 'disabled' : ''}>−</button><output>${s.qty}</output><button data-act="qty" data-d="1" aria-label="1つ増やす">＋</button></div>` : '') +
       stepper(s.counts) +
       `<label class="field"><span>メモ（なくてもOK）</span><input id="f-memo" value="${esc(s.memo)}" placeholder="${s.type === 'in' ? '例：はじめて鉄棒にチャレンジ' : '例：ピンクのシール'}"></label>
        <label class="field"><span>日付</span><input type="date" id="f-date" value="${s.date}"></label>
@@ -461,6 +504,8 @@ function sheetBody(){
     return head(`${s.type === 'in' ? 'もらう' : 'つかう'}項目を${s.id ? '編集' : '追加'}`) +
       `<label class="field"><span>なまえ</span><input id="f-label" value="${esc(s.label)}" placeholder="例：おかたづけ名人"></label>
        <label class="field"><span>マーク（絵文字1つ）</span><input id="f-icon" value="${esc(s.icon)}" maxlength="4"></label>
+       <label class="field"><span>グループ（例：画用紙、折り紙。空ならそのほか）</span><input id="f-group" value="${esc(s.group)}" list="groups"></label>
+       <datalist id="groups">${[...new Set(S.settings.presets[s.type].map(p => p.group).filter(Boolean))].map(g => `<option value="${esc(g)}">`).join('')}</datalist>
        <div class="field"><span>いつもの金額（0のままなら毎回入力）</span></div>
        ${stepper(s.counts)}
        <p class="warn" id="warn"></p>
@@ -522,12 +567,18 @@ document.addEventListener('click', e => {
     case 'rec': {
       const type = t.dataset.type;
       const p = S.settings.presets[type][0];
-      openSheet({ kind:'rec', type, presetId:p ? p.id : null, counts:split(p ? p.amount : 0), memo:'', date:today() });
+      openSheet({ kind:'rec', type, presetId:p ? p.id : null, qty:1, counts:p ? pCounts(p) : [0,0,0,0,0], memo:'', date:today() });
       break;
     }
     case 'pick': {
       const p = S.settings.presets[sheet.type].find(x => x.id === t.dataset.id);
-      sheet.presetId = p.id; sheet.counts = split(p.amount);
+      sheet.presetId = p.id; sheet.qty = 1; sheet.counts = pCounts(p);
+      renderSheet(); break;
+    }
+    case 'qty': {
+      const p = S.settings.presets[sheet.type].find(x => x.id === sheet.presetId);
+      sheet.qty = Math.max(1, sheet.qty + +t.dataset.d);
+      sheet.counts = pCounts(p).map(q => q * sheet.qty);
       renderSheet(); break;
     }
     case 'st': {
@@ -540,7 +591,8 @@ document.addEventListener('click', e => {
     case 'rec-save': {
       const p = S.settings.presets[sheet.type].find(x => x.id === sheet.presetId) || { icon:sheet.type === 'in' ? '🎁' : '🛍️', label:'そのほか' };
       const amount = total(sheet.counts), type = sheet.type, counts = [...sheet.counts];
-      S.tx.push({ id:uid(), kid:view.id, date:sheet.date, type, icon:p.icon, label:p.label, amount, counts, memo:sheet.memo.trim(), at:Date.now() });
+      const qty = p.amount ? sheet.qty : 1;
+      S.tx.push({ id:uid(), kid:view.id, date:sheet.date, type, icon:p.icon, label:p.label, qty, amount, counts, memo:sheet.memo.trim(), at:Date.now() });
       save(); closeSheet(); render();
       toast(`${p.label} ${type === 'in' ? '＋' : '−'}${compactCounts(counts)} を記録しました`);
       break;
@@ -601,14 +653,14 @@ document.addEventListener('click', e => {
       S.tx = S.tx.filter(y => y.id !== x.id); save(); render(); toast('記録を削除しました'); break;
     }
 
-    case 'preset-new': openSheet({ kind:'preset', type:t.dataset.type, id:null, label:'', icon:t.dataset.type === 'in' ? '🌱' : '🛒', counts:[0,0,0,0,0] }); break;
+    case 'preset-new': openSheet({ kind:'preset', type:t.dataset.type, id:null, label:'', icon:t.dataset.type === 'in' ? '🌱' : '🛒', group:'', counts:[0,0,0,0,0] }); break;
     case 'preset-edit': {
       const p = S.settings.presets[t.dataset.type].find(x => x.id === t.dataset.id);
-      openSheet({ kind:'preset', type:t.dataset.type, id:p.id, label:p.label, icon:p.icon, counts:split(p.amount) }); break;
+      openSheet({ kind:'preset', type:t.dataset.type, id:p.id, label:p.label, icon:p.icon, group:p.group || '', counts:pCounts(p) }); break;
     }
     case 'preset-save': {
       const list = S.settings.presets[sheet.type];
-      const data = { label:sheet.label.trim(), icon:sheet.icon.trim(), amount:total(sheet.counts) };
+      const data = { label:sheet.label.trim(), icon:sheet.icon.trim(), group:sheet.group.trim(), counts:[...sheet.counts], amount:total(sheet.counts) };
       if (sheet.id) Object.assign(list.find(x => x.id === sheet.id), data);
       else list.push({ id:'p-' + uid(), ...data });
       save(); closeSheet(); render(); toast('項目を保存しました'); break;
@@ -643,6 +695,7 @@ document.addEventListener('input', e => {
   if (id === 'f-name') sheet.name = v;
   if (id === 'f-label') sheet.label = v;
   if (id === 'f-icon') sheet.icon = v;
+  if (id === 'f-group') sheet.group = v;
   validate();
 });
 
