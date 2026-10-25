@@ -53,6 +53,39 @@ h2{font-size:17px;font-weight:700;margin:0 0 8px}
 .btn.danger{background:transparent;color:var(--out);border:1.5px solid var(--out)}
 @media (prefers-color-scheme:dark){ .btn.primary,.btn.in,.btn.out{color:#10202A} }
 
+.head-btns{display:flex;align-items:center;gap:4px}
+.inv-btn{position:relative;border:1.5px solid var(--line);background:var(--surface);border-radius:12px;padding:6px 12px;font-weight:700;font-size:15px;min-height:40px}
+.badge{position:absolute;top:-7px;right:-7px;background:var(--out);color:#fff;font-size:12px;min-width:20px;height:20px;border-radius:10px;display:grid;place-items:center;padding:0 5px}
+.lowbox{background:var(--out-soft);border-radius:18px;padding:14px;margin-bottom:12px}
+.lowbox h2{color:var(--out)}
+.lowbox ul{list-style:none;margin:0;padding:0}
+.lowbox button{width:100%;display:flex;justify-content:space-between;border:0;background:transparent;padding:6px 0;text-align:left}
+.lowbox strong{color:var(--out)}
+.inv-list{list-style:none;margin:0 0 12px;padding:0;background:var(--surface);border:1px solid var(--line);border-radius:18px}
+.inv-list li + li{border-top:1px solid var(--line)}
+.inv-row{width:100%;display:flex;justify-content:space-between;align-items:center;gap:10px;border:0;background:transparent;padding:12px 14px;text-align:left;border-radius:inherit}
+.inv-name{display:flex;gap:6px;align-items:center}
+.link{font-size:12px;opacity:.7}
+.inv-n{white-space:nowrap;color:var(--muted)}
+.inv-n strong{font-size:22px;font-weight:900;color:var(--ink);margin-right:2px;font-variant-numeric:tabular-nums}
+.inv-row.low .inv-n strong{color:var(--out)}
+.item-stock{display:flex;align-items:baseline;gap:6px;margin:14px 2px 2px}
+.item-stock strong{font-size:56px;font-weight:900;line-height:1;font-variant-numeric:tabular-nums}
+.item-stock span{font-size:18px;color:var(--muted)}
+.item-stock.low strong{color:var(--out)}
+.inv-n{display:flex;flex-direction:column;align-items:flex-end}
+.inv-n small{font-size:12px}
+.pack-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pk-hint{margin:-6px 2px 12px}
+.item-meta{margin:4px 2px;font-size:14px;color:var(--muted)}
+.hist-head{margin:8px 4px 8px;scroll-margin-top:12px}
+.stock-info{margin:0 0 10px;font-size:14px;color:var(--muted);display:flex;flex-direction:column;gap:2px}
+.stock-info:empty{display:none}
+.stock-info .short{color:var(--out);font-weight:700}
+details.lk{background:var(--surface-2);border-radius:14px;padding:10px 12px;margin-bottom:12px}
+details.lk summary{font-weight:700;cursor:pointer}
+.lk-row{display:grid;grid-template-columns:1fr 72px;gap:8px;align-items:center;padding:4px 0}
+.lk-row input{border:1.5px solid var(--line);background:var(--surface);border-radius:10px;padding:6px;text-align:center;font-size:16px;font-weight:700}
 /* お給料日 */
 .payday{margin:4px 0 18px}
 .btn.pay{width:100%;background:var(--surface);border:2px solid var(--t-hiyoko);text-align:left;display:flex;justify-content:space-between;align-items:center;gap:8px}
@@ -311,7 +344,46 @@ function save(){
   try { localStorage.setItem(KEY, JSON.stringify(S)); }
   catch(e) { toast('保存できませんでした。ブラウザの設定を確認してください'); }
 }
-let S = migrate(load());
+/* ===== 在庫 ===== */
+const DEFAULT_ITEMS = [
+  ['i-paper-white', '📄', '白い大きな画用紙',     '画用紙',     '枚',   5, [['s-paper-white',1]]],
+  ['i-paper-color', '🎨', '色つき大きな画用紙',   '画用紙',     '枚',   5, [['s-paper-color',1]]],
+  ['i-paper-b5',    '🟩', 'B5色画用紙',           '画用紙',     '枚',  10, [['s-paper-b5',1]]],
+  ['i-paper-card',  '🟦', 'ハガキサイズ色画用紙', '画用紙',     '枚',  10, [['s-paper-card',1]]],
+  ['i-paper-thick', '📦', '厚紙（白／茶）',       '画用紙',     '枚',   5, [['s-paper-thick',1]]],
+  ['i-ori',         '🔶', 'ふつうの折り紙',       '折り紙',     '枚',  20, [['s-ori-1',1],['s-ori-3',3]]],
+  ['i-ori-kira',    '✨', 'キラキラ折り紙',       '折り紙',     '枚',  10, [['s-ori-kira',1]]],
+  ['i-seal',        '💗', 'シール',               'シール',     '枚',  15, [['s-seal-3',3],['s-seal-5',5]]],
+  ['i-tape',        '🎀', 'マスキングテープ',     'マステ',     '個',   2, []],
+  ['i-scissors',    '✂️', '子ども用ハサミ',       '無料で使うもの', '本', 0, []],
+  ['i-glue',        '🧴', 'のり',                 '無料で使うもの', '本', 2, []],
+  ['i-pencil',      '🖍️', '色鉛筆',               '無料で使うもの', 'セット', 0, []],
+  ['i-sealbook',    '📒', 'シール帳',             '無料で使うもの', '冊', 2, []],
+  ['i-envelope',    '✉️', '封筒',                 'そのほか',   '枚',   0, []],
+  ['i-bag',         '🛍️', '紙袋',                 'そのほか',   '枚',   0, []],
+].map(([id, icon, name, group, unit, alert, links]) => ({ id, icon, name, group, unit, alert, links:links.map(([presetId, per]) => ({ presetId, per })) }));
+const TAPE_LINKS = [['s-tape-10',10],['s-tape-30',30],['s-tape-3x10',30]].map(([presetId, per]) => ({ presetId, per }));
+Object.assign(DEFAULT_ITEMS.find(x => x.id === 'i-tape'), { unit:'cm', alert:1800, pack:{ name:'ロール', size:1800 }, links:TAPE_LINKS });
+function ensureInv(s){
+  if (!s.inventory) s.inventory = { items:DEFAULT_ITEMS.map(x => ({ ...x, pack:x.pack ? { ...x.pack } : null, links:x.links.map(l => ({ ...l })) })), log:[], tapeV2:true };
+  if (!s.inventory.tapeV2){
+    // マステを「個（ロール）」から「cm＋1ロール18m」に切り替え
+    const tape = s.inventory.items.find(x => x.id === 'i-tape');
+    if (tape && !tape.pack && tape.unit === '個'){
+      s.inventory.log.forEach(l => { if (l.itemId === 'i-tape'){ l.delta *= 1800; if (l.type === 'set') l.count *= 1800; } });
+      Object.assign(tape, { unit:'cm', pack:{ name:'ロール', size:1800 }, alert:tape.alert ? tape.alert * 1800 : 1800, links:TAPE_LINKS.map(l => ({ ...l })) });
+    }
+    s.inventory.tapeV2 = true;
+  }
+  return s;
+}
+const packOf = it => it && it.pack && it.pack.size > 0 ? it.pack : null;
+const r1 = x => Math.round(x * 10) / 10;
+function fmtStock(it, n){
+  const pk = packOf(it), base = `${n.toLocaleString()}${it.unit}`;
+  return pk ? `${base}（約${r1(n / pk.size)}${pk.name}）` : base;
+}
+let S = ensureInv(migrate(load()));
 save();
 
 /* ===== ユーティリティ ===== */
@@ -344,11 +416,16 @@ function go(v){ view = v; render(); window.scrollTo(0, 0); }
 function render(){
   if (view.name === 'kid') renderKid();
   else if (view.name === 'settings') renderSettings();
+  else if (view.name === 'inv') renderInv();
+  else if (view.name === 'item') renderItem();
   else renderHome();
 }
 
 function renderHome(){
-  let h = `<div class="head"><h1>おこづかい帳</h1><button class="icon-btn" data-act="settings" aria-label="設定">⚙️</button></div>`;
+  const lowN = lowItems().length;
+  let h = `<div class="head"><h1>おこづかい帳</h1><div class="head-btns">
+    <button class="inv-btn" data-act="inv">📦 在庫${lowN ? `<span class="badge" aria-label="残り少ないもの${lowN}件">${lowN}</span>` : ''}</button>
+    <button class="icon-btn" data-act="settings" aria-label="設定">⚙️</button></div></div>`;
   if (!S.kids.length){
     h += `<div class="empty"><p>まずは園児を登録しましょう。</p><button class="btn primary" data-act="kid-new">園児を追加する</button></div>`;
     $app.innerHTML = h; return;
@@ -498,6 +575,105 @@ function renderSettings(){
       <button class="btn danger wide" data-act="reset">すべてのデータを消す</button></section>`;
 }
 
+/* ===== 在庫の画面 ===== */
+const invItem = id => S.inventory.items.find(x => x.id === id);
+function stockOf(id, excludeTx, excludeLog){
+  let n = 0;
+  S.inventory.log.forEach(l => { if (l.itemId === id && l.id !== excludeLog) n += l.delta; });
+  S.tx.forEach(t => { if (t.id === excludeTx) return; (t.stockUse || []).forEach(u => { if (u.itemId === id) n -= u.qty; }); });
+  return n;
+}
+function stockUseFor(presetId, qty){
+  return S.inventory.items.flatMap(it => (it.links || []).filter(l => l.presetId === presetId && l.per > 0).map(l => ({ itemId:it.id, qty:l.per * qty })));
+}
+const lowItems = () => S.inventory.items.filter(it => it.alert > 0 && stockOf(it.id) <= it.alert);
+function groupItems(list){
+  const m = new Map();
+  list.forEach(it => { const g = it.group || 'そのほか'; if (!m.has(g)) m.set(g, []); m.get(g).push(it); });
+  const arr = [...m.entries()];
+  return arr.filter(([g]) => g !== 'そのほか').concat(arr.filter(([g]) => g === 'そのほか'));
+}
+function presetName(id){
+  for (const type of ['out', 'in']){ const p = S.settings.presets[type].find(x => x.id === id); if (p) return `${p.icon} ${p.label}`; }
+  return null;
+}
+function stockInfoHtml(){
+  if (!sheet || sheet.kind !== 'rec' || sheet.type !== 'out' || !sheet.presetId) return '';
+  const uses = stockUseFor(sheet.presetId, sheet.qty || 1);
+  return uses.map(u => {
+    const it = invItem(u.itemId); if (!it) return '';
+    const cur = stockOf(it.id, sheet.editId), after = cur - u.qty;
+    return `<span class="${after < 0 ? 'short' : ''}">📦 ${esc(it.name)}：のこり ${esc(fmtStock(it, cur))} → ${esc(fmtStock(it, after))}${after < 0 ? '（在庫が足りないかも）' : ''}</span>`;
+  }).join('');
+}
+
+function renderInv(){
+  const low = lowItems();
+  let h = `<div class="head"><button class="back" data-act="home">‹ 一覧</button><h1>在庫</h1><span style="width:44px"></span></div>`;
+  if (low.length){
+    h += `<section class="lowbox"><h2>残り少ないもの</h2><ul>${low.map(it =>
+      `<li><button data-act="open-item" data-id="${it.id}"><span>${it.icon} ${esc(it.name)}</span><strong>${esc(fmtStock(it, stockOf(it.id)))}</strong></button></li>`).join('')}</ul></section>`;
+  }
+  h += groupItems(S.inventory.items).map(([g, items]) => `<p class="chip-group">${esc(g)}</p><ul class="inv-list">${items.map(it => {
+    const n = stockOf(it.id), isLow = it.alert > 0 && n <= it.alert;
+    return `<li><button class="inv-row${isLow ? ' low' : ''}" data-act="open-item" data-id="${it.id}">
+      <span class="inv-name">${it.icon} ${esc(it.name)}${(it.links || []).some(l => l.per > 0) ? '<span class="link" title="おこづかい帳と連動">🔗</span>' : ''}</span>
+      ${packOf(it)
+        ? `<span class="inv-n"><span>約<strong>${r1(n / it.pack.size)}</strong>${esc(it.pack.name)}</span><small>${n.toLocaleString()}${esc(it.unit)}</small></span>`
+        : `<span class="inv-n"><span><strong>${n}</strong>${esc(it.unit)}</span></span>`}</button></li>`;
+  }).join('')}</ul>`).join('');
+  h += `<div class="gap"></div><button class="btn ghost wide" data-act="item-new">＋ 品目を追加する</button>`;
+  $app.innerHTML = h;
+}
+
+function renderItem(){
+  const it = invItem(view.id);
+  if (!it){ go({ name:'inv' }); return; }
+  const n = stockOf(it.id), isLow = it.alert > 0 && n <= it.alert;
+  const links = (it.links || []).filter(l => l.per > 0).map(l => { const nm = presetName(l.presetId); return nm ? `${esc(nm)}で${l.per}${esc(it.unit)}` : ''; }).filter(Boolean);
+  let h = `<div class="head"><button class="back" data-act="inv">‹ 在庫</button><button class="icon-btn" data-act="item-edit" aria-label="品目を編集">✏️</button></div>
+    <div class="kid-hero"><span class="avatar big">${it.icon}</span><h1>${esc(it.name)}</h1></div>
+    ${packOf(it)
+      ? `<div class="item-stock${isLow ? ' low' : ''}"><span>約</span><strong>${r1(n / it.pack.size)}</strong><span>${esc(it.pack.name)}</span></div>
+         <p class="item-meta">${n.toLocaleString()}${esc(it.unit)}（1${esc(it.pack.name)}＝${it.pack.size.toLocaleString()}${esc(it.unit)}）</p>`
+      : `<div class="item-stock${isLow ? ' low' : ''}"><strong>${n}</strong><span>${esc(it.unit)}</span></div>`}
+    <p class="item-meta">${it.alert > 0 ? `${esc(fmtStock(it, it.alert))}以下になったらお知らせ` : 'お知らせなし'}</p>
+    ${links.length ? `<p class="item-meta">🔗 おこづかい帳と連動：${links.join('、')}減る</p>` : ''}
+    <div class="actions">
+      <button class="btn in" data-act="inv-move" data-mode="in">入荷する</button>
+      <button class="btn out" data-act="inv-move" data-mode="use">へらす</button>
+      <button class="btn ex" data-act="inv-move" data-mode="set">数を合わせる</button>
+    </div>`;
+  // 履歴
+  const rows = [];
+  S.inventory.log.filter(l => l.itemId === it.id).forEach(l => rows.push({ date:l.date, at:l.at, delta:l.delta, l }));
+  S.tx.forEach(t => (t.stockUse || []).forEach(u => { if (u.itemId === it.id) rows.push({ date:t.date, at:t.at, delta:-u.qty, t }); }));
+  rows.sort((a, b) => a.date.localeCompare(b.date) || a.at - b.at);
+  let run = 0; rows.forEach(r => { run += r.delta; r.run = run; });
+  rows.reverse();
+  h += `<h2 class="hist-head">これまでの動き</h2>`;
+  if (!rows.length){ h += `<p class="empty-s">まだ記録がありません。最初は「数を合わせる」で、いまある数を入れてください。</p>`; $app.innerHTML = h; return; }
+  const pages = Math.ceil(rows.length / PER_PAGE);
+  const page = Math.min(Math.max(1, view.page || 1), pages);
+  const slice = rows.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+  const MODE = { in:'📥 入荷', use:'📤 へらした', set:'🧮 数を合わせた' };
+  h += `<ul class="log">${slice.map(r => {
+    const sign = r.delta > 0 ? '＋' : r.delta < 0 ? '−' : '±';
+    const amt = `<div class="amt l-amt ${r.delta >= 0 ? 'in' : 'out'}"><span class="amt-raw">${sign}${Math.abs(r.delta)}${esc(it.unit)}</span>${r.l && r.l.cost ? `<span class="amt-sum">${Number(r.l.cost).toLocaleString()}円</span>` : ''}</div>`;
+    if (r.l){
+      const memo = r.l.memo ? `<div class="l-memo">${esc(r.l.memo)}</div>` : '';
+      const label = r.l.type === 'set' ? `${MODE.set}（${esc(fmtStock(it, r.l.count))}）` : MODE[r.l.type];
+      return `<li><button class="l-row" data-act="inv-edit" data-id="${r.l.id}"><div class="l-date">${md(r.date)}</div>
+        <div><div class="l-top"><div class="l-label">${label}</div>${amt}</div>${memo}<div class="l-run">のこり ${esc(fmtStock(it, r.run))}</div></div><span class="chev" aria-hidden="true">›</span></button></li>`;
+    }
+    const k = kid(r.t.kid);
+    return `<li><div class="l-row"><div class="l-date">${md(r.date)}</div>
+      <div><div class="l-top"><div class="l-label">${k ? k.icon + ' ' + esc(k.name) : '（削除した園児）'}が買った</div>${amt}</div><div class="l-memo">${r.t.icon} ${esc(r.t.label)}${r.t.qty > 1 ? ` ×${r.t.qty}` : ''}</div><div class="l-run">のこり ${esc(fmtStock(it, r.run))}</div></div><span></span></div></li>`;
+  }).join('')}</ul>` + pager(page, pages) +
+  `<p class="hint">園児が買った記録は、その子の「きろく」から直せます</p>`;
+  $app.innerHTML = h;
+}
+
 /* ===== シート ===== */
 function stepper(c){
   return `<div class="stepper">` + UNITS.map((u, i) => `<div class="st-row" style="--tier:${u.c}">
@@ -519,6 +695,7 @@ function sheetBody(){
       (s.editId && !selP ? `<p class="ex-note">いまの項目：${s.origIcon} ${esc(s.origLabel)}（変えるときは下から選んでね）</p>` : '') +
       groupPresets(ps).map(([g, items]) => `<p class="chip-group">${esc(g)}</p><div class="chips">${items.map(p => `<button class="chip${p.id === s.presetId ? ' on' : ''}" data-act="pick" data-id="${p.id}">${p.icon} ${esc(p.label)}${p.amount ? `<small>${compactCounts(pCounts(p))}</small>` : ''}</button>`).join('')}</div>`).join('') +
       (selP && selP.amount ? `<div class="qty"><span>いくつ？</span><button data-act="qty" data-d="-1" aria-label="1つ減らす" ${s.qty <= 1 ? 'disabled' : ''}>−</button><input id="f-qty" type="number" inputmode="numeric" min="1" step="1" value="${s.qty}" aria-label="個数"><button data-act="qty" data-d="1" aria-label="1つ増やす">＋</button></div>` : '') +
+      `<p class="stock-info" id="stock-info">${stockInfoHtml()}</p>` +
       stepper(s.counts) +
       `<label class="field"><span>メモ（なくてもOK）</span><input id="f-memo" value="${esc(s.memo)}" placeholder="${s.type === 'in' ? '例：はじめて鉄棒にチャレンジ' : '例：ピンクのシール'}"></label>
        <label class="field"><span>日付</span><input type="date" id="f-date" value="${s.date}"></label>
@@ -581,6 +758,49 @@ function sheetBody(){
        <button class="btn primary wide" id="save" data-act="preset-save">保存する</button>
        ${s.id ? `<div class="gap"></div><button class="btn danger wide" data-act="preset-del">この項目を削除する</button>` : ''}`;
   }
+  if (s.kind === 'invmove'){
+    const it = invItem(s.itemId);
+    const title = { in:'📥 入荷する', use:'📤 へらす', set:'🧮 数を合わせる' }[s.mode];
+    const cur = stockOf(it.id, null, s.editId);
+    const pk = packOf(it), usePk = pk && s.inPack;
+    const u = esc(usePk ? pk.name : it.unit);
+    const lbl = { in:`入荷した数（${u}）`, use:`へらす数（${u}）`, set:`いま実際にある数（${u}）` }[s.mode];
+    return head(`${title}：${it.icon} ${esc(it.name)}`) +
+      `<p class="item-meta">記録上の在庫：${esc(fmtStock(it, cur))}</p>
+       ${pk ? `<div class="tabs small" role="tablist">
+         <button role="tab" aria-selected="${!!usePk}" data-act="inpack" data-v="1">${esc(pk.name)}で入れる</button>
+         <button role="tab" aria-selected="${!usePk}" data-act="inpack" data-v="0">${esc(it.unit)}で入れる</button></div>` : ''}
+       <label class="field"><span>${lbl}</span><input id="f-n" type="number" inputmode="${usePk ? 'decimal' : 'numeric'}" min="0" step="${usePk ? 'any' : '1'}" value="${esc(s.n)}"></label>
+       ${usePk ? `<p class="hint pk-hint">1${esc(pk.name)}＝${pk.size.toLocaleString()}${esc(it.unit)}。「2.5」のように小数でもOK</p>` : ''}
+       ${s.mode === 'in' ? `<label class="field"><span>仕入れ値（円・なくてもOK）</span><input id="f-cost" type="number" inputmode="numeric" min="0" step="1" value="${esc(s.cost)}"></label>` : ''}
+       <label class="field"><span>メモ（なくてもOK）</span><input id="f-memo" value="${esc(s.memo)}" placeholder="${s.mode === 'use' ? '例：工作で使った、やぶれた' : s.mode === 'in' ? '例：100円ショップで購入' : '例：月末のたな卸し'}"></label>
+       <label class="field"><span>日付</span><input type="date" id="f-date" value="${s.date}"></label>
+       <p class="warn" id="warn"></p>
+       <button class="btn primary wide" id="save" data-act="invmove-save">${s.editId ? '保存する' : '記録する'}</button>
+       ${s.editId ? `<div class="gap"></div><button class="btn danger wide" data-act="invmove-del">この記録を削除する</button>` : ''}`;
+  }
+  if (s.kind === 'item'){
+    const groups = [...new Set(S.inventory.items.map(x => x.group).filter(Boolean))];
+    const linkRows = groupPresets(S.settings.presets.out).map(([g, items]) => `<p class="chip-group">${esc(g)}</p>` + items.map(p =>
+      `<div class="lk-row"><span>${p.icon} ${esc(p.label)}</span><input id="lk-${p.id}" type="number" inputmode="numeric" min="0" step="1" value="${s.links[p.id] || 0}" aria-label="${esc(p.label)}で減る数"></div>`).join('')).join('');
+    return head(s.id ? '品目を編集' : '品目を追加') +
+      `<label class="field"><span>なまえ</span><input id="f-name" value="${esc(s.name)}" placeholder="例：クレヨン"></label>
+       <label class="field"><span>マーク（絵文字1つ）</span><input id="f-icon" value="${esc(s.icon)}" maxlength="4"></label>
+       <label class="field"><span>グループ</span><input id="f-group" value="${esc(s.group)}" list="igroups"></label>
+       <datalist id="igroups">${groups.map(g => `<option value="${esc(g)}">`).join('')}</datalist>
+       <label class="field"><span>数える単位（枚・本・cmなど）</span><input id="f-unit" value="${esc(s.unit)}"></label>
+       <div class="pack-row">
+         <label class="field"><span>まとめ単位（ロール・袋など、なくてもOK）</span><input id="f-packname" value="${esc(s.packName)}" placeholder="例：ロール"></label>
+         <label class="field"><span>1つあたり何${esc(s.unit || '個')}？</span><input id="f-packsize" type="number" inputmode="numeric" min="0" step="1" value="${esc(s.packSize)}" placeholder="例：1800"></label>
+       </div>
+       <p class="hint pk-hint">例：マステなら、単位「cm」・まとめ単位「ロール」・1つあたり「1800」（18m）。</p>
+       <label class="field"><span>何${esc(s.unit || '個')}以下になったらお知らせする？（0ならお知らせなし）</span><input id="f-alert" type="number" inputmode="numeric" min="0" step="1" value="${esc(s.alert)}"></label>
+       <details class="lk"${Object.values(s.links).some(v => v > 0) ? ' open' : ''}><summary>おこづかい帳との連動</summary>
+         <p class="hint">「つかう」で記録したとき、1つにつき何${esc(s.unit || '個')}減らすか。0なら連動しません。</p>${linkRows}</details>
+       <p class="warn" id="warn"></p>
+       <button class="btn primary wide" id="save" data-act="item-save">${s.id ? '保存する' : '追加する'}</button>
+       ${s.id ? `<div class="gap"></div><button class="btn danger wide" data-act="item-del">この品目を削除する</button>` : ''}`;
+  }
   return '';
 }
 function renderSheet(){
@@ -613,6 +833,8 @@ function validate(){
   if (sheet.kind === 'ex') ok = sheet.delta.some(q => q !== 0) && !!sheet.date;
   if (sheet.kind === 'payamt') ok = total(sheet.counts) > 0;
   if (sheet.kind === 'kid') ok = sheet.name.trim().length > 0;
+  if (sheet.kind === 'invmove'){ const n = parseFloat(sheet.n); ok = Number.isFinite(n) && (sheet.mode === 'set' ? n >= 0 : n > 0) && !!sheet.date; }
+  if (sheet.kind === 'item') ok = sheet.name.trim().length > 0 && sheet.icon.trim().length > 0;
   if (sheet.kind === 'preset') ok = sheet.label.trim().length > 0 && sheet.icon.trim().length > 0;
   btn.disabled = !ok;
   if (w && msg !== null) w.textContent = msg;
@@ -638,7 +860,7 @@ document.addEventListener('click', e => {
     case 'open-month': view.span = 'month'; view.month = t.dataset.ym; render(); break;
     case 'page': {
       view.page = +t.dataset.p; render();
-      const tabs = document.querySelector('.tabs'); if (tabs) tabs.scrollIntoView({ block:'start' });
+      const anchor = document.querySelector('.tabs, .hist-head'); if (anchor) anchor.scrollIntoView({ block:'start' });
       break;
     }
     case 'close': closeSheet(); break;
@@ -672,7 +894,8 @@ document.addEventListener('click', e => {
       const p = sel || (sheet.editId ? { icon:sheet.origIcon, label:sheet.origLabel } : { icon:sheet.type === 'in' ? '🎁' : '🛍️', label:'そのほか' });
       const amount = total(sheet.counts), type = sheet.type, counts = [...sheet.counts];
       const qty = sel && sel.amount ? sheet.qty : 1;
-      const data = { kid:view.id, date:sheet.date, type, presetId:sel ? sel.id : null, icon:p.icon, label:p.label, qty, amount, counts, memo:sheet.memo.trim() };
+      const stockUse = type === 'out' && sel ? stockUseFor(sel.id, qty) : [];
+      const data = { kid:view.id, date:sheet.date, type, presetId:sel ? sel.id : null, icon:p.icon, label:p.label, qty, amount, counts, stockUse, memo:sheet.memo.trim() };
       if (sheet.editId){
         Object.assign(S.tx.find(x => x.id === sheet.editId), data);
         save(); closeSheet(); render(); toast('記録を直しました');
@@ -733,6 +956,8 @@ document.addEventListener('click', e => {
       const k = kid(sheet.id);
       const n = S.tx.filter(x => x.kid === k.id).length;
       if (!confirm(`${k.name}と、その記録${n}件を削除します。元に戻せません。よろしいですか？`)) break;
+      // 在庫の数がずれないよう、買った分は在庫の記録として残す
+      S.tx.filter(x => x.kid === k.id).forEach(x => (x.stockUse || []).forEach(u => S.inventory.log.push({ id:uid(), itemId:u.itemId, type:'use', delta:-u.qty, date:x.date, memo:`${k.name}が買った分（${x.label}）`, cost:0, at:x.at })));
       S.kids = S.kids.filter(x => x.id !== k.id); S.tx = S.tx.filter(x => x.kid !== k.id);
       save(); closeSheet(); go({ name:'home' }); toast('削除しました'); break;
     }
@@ -774,6 +999,66 @@ document.addEventListener('click', e => {
       save(); closeSheet(); render(); toast('項目を削除しました'); break;
     }
 
+    case 'inv': go({ name:'inv' }); break;
+    case 'open-item': go({ name:'item', id:t.dataset.id, page:1 }); break;
+    case 'inv-move': {
+      const it = invItem(view.id), pk = packOf(it), mode = t.dataset.mode;
+      const inPack = !!pk && mode !== 'use';
+      const n = mode === 'set' ? String(inPack ? r1(stockOf(it.id) / pk.size) : stockOf(it.id)) : '';
+      openSheet({ kind:'invmove', itemId:it.id, mode, inPack, n, cost:'', memo:'', date:today() });
+      break;
+    }
+    case 'inpack': {
+      const pk = packOf(invItem(sheet.itemId)), want = t.dataset.v === '1';
+      if (!pk || want === !!sheet.inPack) break;
+      const v = parseFloat(sheet.n);
+      if (Number.isFinite(v)) sheet.n = String(want ? r1(v / pk.size) : Math.round(v * pk.size));
+      sheet.inPack = want; renderSheet(); break;
+    }
+    case 'inv-edit': {
+      const l = S.inventory.log.find(x => x.id === t.dataset.id); if (!l) break;
+      openSheet({ kind:'invmove', editId:l.id, itemId:l.itemId, mode:l.type, inPack:false, n:String(l.type === 'set' ? l.count : Math.abs(l.delta)), cost:l.cost ? String(l.cost) : '', memo:l.memo || '', date:l.date });
+      break;
+    }
+    case 'invmove-save': {
+      const pk = packOf(invItem(sheet.itemId)), raw = parseFloat(sheet.n);
+      const n = Math.round(pk && sheet.inPack ? raw * pk.size : raw), cur = stockOf(sheet.itemId, null, sheet.editId);
+      const delta = sheet.mode === 'in' ? n : sheet.mode === 'use' ? -n : n - cur;
+      const cost = parseInt(sheet.cost, 10);
+      const data = { itemId:sheet.itemId, type:sheet.mode, delta, date:sheet.date, memo:sheet.memo.trim(),
+        ...(sheet.mode === 'set' ? { count:n } : {}), ...(sheet.mode === 'in' && cost > 0 ? { cost } : { cost:0 }) };
+      if (sheet.editId) Object.assign(S.inventory.log.find(x => x.id === sheet.editId), data);
+      else { S.inventory.log.push({ id:uid(), ...data, at:Date.now() }); view.page = 1; }
+      save(); closeSheet(); render(); toast('記録しました'); break;
+    }
+    case 'invmove-del':
+      if (!confirm('この記録を削除しますか？')) break;
+      S.inventory.log = S.inventory.log.filter(x => x.id !== sheet.editId);
+      save(); closeSheet(); render(); toast('記録を削除しました'); break;
+    case 'item-new': openSheet({ kind:'item', id:null, name:'', icon:'📦', group:'', unit:'個', packName:'', packSize:'', alert:'0', links:{} }); break;
+    case 'item-edit': {
+      const it = invItem(view.id);
+      const links = {}; (it.links || []).forEach(l => { links[l.presetId] = l.per; });
+      openSheet({ kind:'item', id:it.id, name:it.name, icon:it.icon, group:it.group || '', unit:it.unit || '', packName:it.pack ? it.pack.name : '', packSize:it.pack ? String(it.pack.size) : '', alert:String(it.alert || 0), links });
+      break;
+    }
+    case 'item-save': {
+      const alert = parseInt(sheet.alert, 10);
+      const data = { name:sheet.name.trim(), icon:sheet.icon.trim(), group:sheet.group.trim(), unit:sheet.unit.trim() || '個',
+        alert:Number.isFinite(alert) && alert > 0 ? alert : 0,
+        pack:(() => { const sz = parseInt(sheet.packSize, 10); return sheet.packName.trim() && sz > 0 ? { name:sheet.packName.trim(), size:sz } : null; })(),
+        links:Object.entries(sheet.links).filter(([, v]) => v > 0).map(([presetId, per]) => ({ presetId, per })) };
+      if (sheet.id) Object.assign(invItem(sheet.id), data);
+      else S.inventory.items.push({ id:'i-' + uid(), ...data });
+      save(); closeSheet(); render(); toast('品目を保存しました'); break;
+    }
+    case 'item-del': {
+      const it = invItem(sheet.id);
+      if (!confirm(`「${it.name}」と、その入荷などの記録を削除します。よろしいですか？（おこづかい帳の記録は消えません）`)) break;
+      S.inventory.items = S.inventory.items.filter(x => x.id !== it.id);
+      S.inventory.log = S.inventory.log.filter(x => x.itemId !== it.id);
+      save(); closeSheet(); go({ name:'inv' }); toast('削除しました'); break;
+    }
     case 'export': {
       const blob = new Blob([JSON.stringify(S, null, 2)], { type:'application/json' });
       const url = URL.createObjectURL(blob);
@@ -785,7 +1070,7 @@ document.addEventListener('click', e => {
     }
     case 'reset':
       if (!confirm('園児と記録をすべて消します。元に戻せません。先にバックアップを書き出しましたか？')) break;
-      S = defaults(); save(); go({ name:'home' }); toast('リセットしました'); break;
+      S = ensureInv(defaults()); save(); go({ name:'home' }); toast('リセットしました'); break;
   }
 });
 
@@ -811,8 +1096,16 @@ document.addEventListener('input', e => {
       sheet.counts = pCounts(p).map(q => q * n);
       sheet.counts.forEach((q, i) => { const el = document.getElementById('st-' + i); if (el) el.value = q; });
       document.getElementById('st-total').textContent = compactCounts(sheet.counts);
+      const si = document.getElementById('stock-info'); if (si) si.innerHTML = stockInfoHtml();
     }
   }
+  if (id === 'f-n') sheet.n = v;
+  if (id === 'f-cost') sheet.cost = v;
+  if (id === 'f-unit') sheet.unit = v;
+  if (id === 'f-packname') sheet.packName = v;
+  if (id === 'f-packsize') sheet.packSize = v;
+  if (id === 'f-alert') sheet.alert = v;
+  if (id.startsWith('lk-')){ const n = parseInt(v, 10); sheet.links[id.slice(3)] = Number.isFinite(n) && n > 0 ? n : 0; }
   validate();
 });
 
@@ -831,7 +1124,7 @@ document.addEventListener('change', e => {
       const d = JSON.parse(r.result);
       if (!Array.isArray(d.kids) || !Array.isArray(d.tx) || !d.settings) throw new Error('bad');
       if (!confirm(`園児${d.kids.length}人・記録${d.tx.length}件のデータで、いまのデータを置き換えます。よろしいですか？`)) return;
-      S = d; save(); go({ name:'home' }); toast('読み込みました');
+      S = ensureInv(migrate(d)); save(); go({ name:'home' }); toast('読み込みました');
     } catch(err) { toast('このファイルは読み込めません'); }
     finally { e.target.value = ''; }
   };
