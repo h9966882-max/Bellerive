@@ -78,10 +78,6 @@ h2{font-size:17px;font-weight:700;margin:0 0 8px}
 .rack.big .slot .e{font-size:30px}
 .rack.big .slot .n{font-size:28px}
 
-.road{margin-top:10px;display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted)}
-.track{flex:1;height:8px;border-radius:99px;background:var(--surface-2);overflow:hidden}
-.track i{display:block;height:100%;background:var(--t-hat);border-radius:99px}
-.road.done span{color:var(--t-hat);font-weight:700}
 
 /* 園児ページ */
 .kid-hero{display:flex;align-items:center;gap:14px}
@@ -103,15 +99,18 @@ h2{font-size:17px;font-weight:700;margin:0 0 8px}
 
 .log{list-style:none;padding:0;margin:0;background:var(--surface);border:1px solid var(--line);border-radius:18px}
 .log li{border-top:1px solid var(--line)}
-.l-row{width:100%;display:grid;grid-template-columns:44px 1fr auto 14px;gap:8px;align-items:start;padding:12px 10px 12px 14px;border:0;background:transparent;text-align:left;border-radius:inherit}
+.l-row{width:100%;display:grid;grid-template-columns:44px 1fr 14px;gap:8px;align-items:start;padding:12px 10px 12px 14px;border:0;background:transparent;text-align:left;border-radius:inherit}
 .l-row .chev{color:var(--muted);padding-top:2px}
 .log li:first-child{border-top:0}
 .l-date{font-size:13px;color:var(--muted);padding-top:2px;font-variant-numeric:tabular-nums}
-.l-label{font-weight:700}
+.l-top{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:2px 10px}
+.l-label{font-weight:700;flex:1 1 auto;min-width:7em}
+.l-top .amt{flex:0 1 auto;margin-left:auto}
+.u{white-space:nowrap}
 .l-memo{font-size:14px;color:var(--muted);overflow-wrap:anywhere}
 .l-run{font-size:12px;color:var(--muted)}
 .amt{display:flex;flex-direction:column;align-items:flex-end;text-align:right}
-.amt-raw{font-weight:900;white-space:nowrap}
+.amt-raw{font-weight:900}
 .amt-sum{font-size:12px;color:var(--muted);font-weight:500;white-space:nowrap}
 .l-amt{padding-top:1px}
 .l-amt.in{color:var(--in)} .l-amt.out{color:var(--out)}
@@ -228,17 +227,17 @@ function countsOf(t){ return Array.isArray(t.counts) ? t.counts : split(t.amount
 function sumCounts(list){ return list.reduce((acc, t) => { const c = countsOf(t); return acc.map((q, i) => q + c[i]); }, [0,0,0,0,0]); }
 function amtHtml(sign, c, cls){
   const n = total(c), raw = compactCounts(c), sum = compact(n);
-  return `<div class="amt ${cls}"><span class="amt-raw">${sign}${raw}</span>${raw !== sum ? `<span class="amt-sum">合計 ${sum}</span>` : ''}</div>`;
+  return `<div class="amt ${cls}"><span class="amt-raw">${sign}${unitsHtml(c)}</span>${raw !== sum ? `<span class="amt-sum">合計 ${sum}</span>` : ''}</div>`;
+}
+function unitsHtml(c){
+  const parts = c.map((q, i) => q ? `<span class="u">${q}${UNITS[i].e}</span>` : '').filter(Boolean);
+  return parts.length ? parts.join('<wbr>') : '<span class="u">0🐥</span>';
 }
 function compactCounts(c){ return c.map((q,i)=> q ? q + UNITS[i].e : '').filter(Boolean).join('') || '0🐥'; }
 function rack(c, big){
   return `<div class="rack${big?' big':''}">` + c.map((q, i) =>
     `<div class="slot${q?'':' zero'}" style="--tier:${UNITS[i].c}"><span class="e">${UNITS[i].e}</span><span class="n">${q}</span></div>`
   ).join('') + `</div>`;
-}
-function road(b){
-  if (b >= HAT) return `<div class="road done"><div class="track"><i style="width:100%"></i></div><span>🎩 イベントに参加できるよ</span></div>`;
-  return `<div class="road"><div class="track"><i style="width:${(b / HAT * 100).toFixed(1)}%"></i></div><span>🎩まで あと${compact(HAT - b)}</span></div>`;
 }
 
 /* ===== データ ===== */
@@ -364,7 +363,7 @@ function renderHome(){
     const h = holdings(k.id), b = total(h);
     return `<li><button class="kid" data-act="open-kid" data-id="${k.id}">
       <div class="kid-top"><span class="avatar">${k.icon}</span><span class="name">${esc(k.name)}</span></div>
-      ${rack(h)}<p class="w-sum">合計 ${compact(b)}</p>${road(b)}
+      ${rack(h)}<p class="w-sum">合計 ${compact(b)}</p>
     </button></li>`;
   }).join('') + `</ul>`;
   h += `<button class="btn ghost wide" data-act="kid-new">＋ 園児を追加する</button>`;
@@ -379,7 +378,7 @@ function renderKid(){
   let h = `<div class="head"><button class="back" data-act="home">‹ 一覧</button><button class="icon-btn" data-act="kid-edit" aria-label="園児を編集">✏️</button></div>
     <div class="kid-hero"><span class="avatar big">${k.icon}</span><h1>${esc(k.name)}</h1></div>
     <p class="w-label">おさいふの中</p>
-    ${rack(hold, true)}<p class="w-sum">合計 ${compact(b)}</p>${road(b)}
+    ${rack(hold, true)}<p class="w-sum">合計 ${compact(b)}</p>
     <div class="actions">
       <button class="btn in" data-act="rec" data-type="in">もらう</button>
       <button class="btn out" data-act="rec" data-type="out">つかう</button>
@@ -397,8 +396,7 @@ const PER_PAGE = 20;
 function txRow({ t, run }){
   return `<li><button class="l-row" data-act="tx-edit" data-id="${t.id}" aria-label="${md(t.date)} ${esc(t.label)} を直す">
     <div class="l-date">${md(t.date)}</div>
-    <div><div class="l-label">${t.icon} ${esc(t.label)}${t.qty > 1 ? ` ×${t.qty}` : ''}</div>${t.memo ? `<div class="l-memo">${esc(t.memo)}</div>` : ''}<div class="l-run">のこり ${compactCounts(run)}</div></div>
-    ${t.type === 'ex' ? `<div class="amt l-amt ex"><span class="amt-raw">${exText(t.delta)}</span></div>` : amtHtml(t.type === 'in' ? '＋' : '−', countsOf(t), 'l-amt ' + t.type)}
+    <div><div class="l-top"><div class="l-label">${t.icon} ${esc(t.label)}${t.qty > 1 ? ` ×${t.qty}` : ''}</div>${t.type === 'ex' ? `<div class="amt l-amt ex"><span class="amt-raw">${exText(t.delta)}</span></div>` : amtHtml(t.type === 'in' ? '＋' : '−', countsOf(t), 'l-amt ' + t.type)}</div>${t.memo ? `<div class="l-memo">${esc(t.memo)}</div>` : ''}<div class="l-run">のこり ${unitsHtml(run)}</div></div>
     <span class="chev" aria-hidden="true">›</span>
   </button></li>`;
 }
